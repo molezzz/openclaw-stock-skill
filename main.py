@@ -7,10 +7,12 @@ from typing import Any, Dict
 from adapters import AkshareAdapter
 from formatter import render_output
 from router import (
+    FUNDAMENTAL,
     INDEX_REALTIME,
     INTRADAY_ANALYSIS,
     KLINE_ANALYSIS,
     LIMIT_STATS,
+    MARGIN_LHB,
     MONEY_FLOW,
     parse_query,
 )
@@ -38,8 +40,22 @@ def dispatch(intent_obj, adapter: AkshareAdapter) -> Dict[str, Any]:
 
     if intent_obj.intent == MONEY_FLOW:
         top_n = intent_obj.top_n or 10
+        query = intent_obj.query or ""
+        if any(k in query for k in ["北向", "南向", "东向", "市场资金", "大盘资金"]):
+            return adapter.market_money_flow(top_n=top_n, date=intent_obj.date)
+        if any(k in query for k in ["行业资金", "板块资金", "行业流入", "板块流入"]):
+            return adapter.sector_money_flow(top_n=top_n)
         symbol = intent_obj.symbol or "000001"
         return adapter.money_flow(symbol=symbol, top_n=top_n)
+
+    if intent_obj.intent == FUNDAMENTAL:
+        top_n = intent_obj.top_n or 20
+        symbol = intent_obj.symbol or "600519"
+        return adapter.fundamental(symbol=symbol, top_n=top_n)
+
+    if intent_obj.intent == MARGIN_LHB:
+        top_n = intent_obj.top_n or 10
+        return adapter.margin_lhb(symbol=intent_obj.symbol, date=intent_obj.date, top_n=top_n)
 
     return {
         "ok": True,

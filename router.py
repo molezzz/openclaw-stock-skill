@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Optional
 import re
 
@@ -67,10 +68,10 @@ def _extract_date(query: str) -> Optional[str]:
     if m:
         return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
 
-    if "今天" in query:
-        return "today"
+    if "今天" in query or "今日" in query:
+        return datetime.now().strftime("%Y-%m-%d")
     if "昨天" in query or "昨日" in query:
-        return "yesterday"
+        return (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
     return None
 
@@ -126,11 +127,11 @@ def _classify_intent(query: str) -> str:
         return INTRADAY_ANALYSIS
     if any(k in query for k in ["k线", "K线", "日线", "周线", "月线"]) or "kline" in q:
         return KLINE_ANALYSIS
-    if any(k in query for k in ["资金流", "主力资金", "北向资金", "南向资金"]):
+    if any(k in query for k in ["资金流", "主力资金", "北向资金", "南向资金", "东向资金", "行业资金", "板块资金"]):
         return MONEY_FLOW
-    if any(k in query for k in ["基本面", "财报", "市盈率", "市净率", "估值"]):
+    if any(k in query for k in ["基本面", "财报", "财务", "市盈率", "市净率", "估值", "roe", "ROE", "毛利率", "净利率", "资产负债率"]):
         return FUNDAMENTAL
-    if any(k in query for k in ["融资融券", "龙虎榜", "两融"]):
+    if any(k in query for k in ["融资融券", "龙虎榜", "两融", "融资余额", "融券余额"]):
         return MARGIN_LHB
     if any(k in query for k in ["板块", "行业", "概念"]):
         return SECTOR_ANALYSIS

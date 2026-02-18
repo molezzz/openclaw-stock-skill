@@ -101,6 +101,13 @@ def _fmt_amount(value: Any) -> str:
     return f"{num:.0f}"
 
 
+def _fmt_ratio(value: Any) -> str:
+    num = _safe_float(value)
+    if num is None:
+        return "?"
+    return f"{num:.2f}%"
+
+
 def _fmt_date(value: Any) -> str:
     if value is None:
         return "未知"
@@ -315,9 +322,66 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             return "\n".join([f"{emoji} 资金流向 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
 
         data = result.get("data", {})
-        symbol = data.get("symbol") or getattr(intent_obj, "symbol", "?") or "?"
+        scope = data.get("scope") or "individual"
         items = data.get("items", [])
 
+        if scope == "market":
+            lines = [f"💰 市场资金流向 · {ts}", ""]
+            if not items:
+                lines.extend(["暂无市场资金流数据", "", "数据源: akshare"])
+                return "\n".join(lines)
+
+            latest = items[0] if isinstance(items[0], dict) else {}
+            d = _fmt_date(_pick(latest, ["日期", "交易日期", "date", "时间"]))
+            
+            # 尝试获取主力净流入等字段
+            main_flow = _pick(latest, ["主力净流入-净额", "主力净流入", "净额"])
+            super_flow = _pick(latest, ["超大单净流入-净额", "超大单净流入"])
+            
+            lines.append(f"最新({d})")
+            if main_flow is not None:
+                lines.append(f"- 主力净流入: {_fmt_amount(main_flow)}")
+            if super_flow is not None:
+                lines.append(f"- 超大单净流入: {_fmt_amount(super_flow)}")
+
+            lines.append("")
+            lines.append("近5日主力资金:")
+            for item in items[:5]:
+                if not isinstance(item, dict):
+                    lines.append(f"- {item}")
+                    continue
+                day = _fmt_date(_pick(item, ["日期", "交易日期", "date", "时间"]))
+                val = _pick(item, ["主力净流入-净额", "主力净流入", "净额", "净流入"])
+                if val is not None:
+                    lines.append(f"- {day}: {_fmt_amount(val)}")
+
+            lines.extend(["", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        if scope == "sector":
+            lines = [f"💰 行业资金流向 · {ts}", ""]
+            if not items:
+                lines.extend(["暂无行业资金流数据", "", "数据源: akshare"])
+                return "\n".join(lines)
+
+            lines.append("净流入前10行业:")
+            for idx, item in enumerate(items[:10], start=1):
+                if not isinstance(item, dict):
+                    lines.append(f"{idx}. {item}")
+                    continue
+                name = _pick(item, ["名称", "行业", "板块名称", "行业名称"], "?")
+                inflow = _pick(item, ["今日主力净流入-净额", "主力净流入", "今日净流入", "净流入", "主力净额", "今日主力净流入"])
+                pct = _pick(item, ["今日涨跌幅", "涨跌幅", "涨跌幅%"])
+                pct_text = f" | {_fmt_pct(pct)}" if pct is not None else ""
+                if inflow is not None:
+                    lines.append(f"{idx}. {name}: {_fmt_amount(inflow)}{pct_text}")
+                else:
+                    lines.append(f"{idx}. {name}{pct_text}")
+
+            lines.extend(["", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        symbol = data.get("symbol") or getattr(intent_obj, "symbol", "?") or "?"
         lines = [f"💰 {symbol} 资金流向 · {ts}", ""]
         if not items:
             lines.extend(["暂无资金流数据", "", "数据源: akshare"])
@@ -344,6 +408,103 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             inflow = _pick(item, ["主力净流入-净额", "主力净流入", "主力净额", "主力净流入额"])
             ratio = _pick(item, ["主力净流入-净占比", "主力净占比", "主力净流入占比"])
             lines.append(f"- {day}: {_fmt_amount(inflow)} ({_fmt_pct(ratio)})")
+
+        lines.extend(["", "数据源: akshare"])
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "FUNDAMENTAL":
+        if not result.get("ok"):
+            return "\n".join([f"{emoji} 基本面分析 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        symbol = data.get("symbol") or getattr(intent_obj, "symbol", "?") or "?"
+        latest = data.get("latest") if isinstance(data.get("latest"), dict) else {}
+        items = data.get("items", [])
+
+        if not latest and isinstance(items, list):
+            first_item = items[0] if items else None
+            if isinstance(first_item, dict):
+                latest = first_item
+
+        lines = [f"📊 {symbol} 基本面摘要 · {ts}", ""]
+        if not latest:
+            lines.extend(["暂无基本面数据", "", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        period = _pick(latest, ["报告期", "日期", "报告日期", "公告日期"], "最新")
+        roe = _pick(latest, ["净资产收益率", "ROE", "净资产收益率(%)"])
+        gross_margin = _pick(latest, ["销售毛利率", "毛利率", "毛利率(%)"])
+        net_margin = _pick(latest, ["销售净利率", "净利率", "净利率(%)", "净利润率"])
+        debt_ratio = _pick(latest, ["资产负债率", "资产负债率(%)"])
+        rev_yoy = _pick(latest, ["营业总收入同比增长率", "营业收入同比增长率", "营收同比"])
+        np_yoy = _pick(latest, ["净利润同比增长率", "归母净利润同比增长率", "净利润同比"])
+
+        lines.append(f"报告期: {_fmt_date(period)}")
+        if roe is not None:
+            lines.append(f"- ROE: {_fmt_ratio(roe)}")
+        if gross_margin is not None:
+            lines.append(f"- 毛利率: {_fmt_ratio(gross_margin)}")
+        if net_margin is not None:
+            lines.append(f"- 净利率: {_fmt_ratio(net_margin)}")
+        if debt_ratio is not None:
+            lines.append(f"- 资产负债率: {_fmt_ratio(debt_ratio)}")
+        if rev_yoy is not None:
+            lines.append(f"- 营收同比: {_fmt_pct(rev_yoy)}")
+        if np_yoy is not None:
+            lines.append(f"- 净利润同比: {_fmt_pct(np_yoy)}")
+
+        lines.extend(["", "数据源: akshare"])
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "MARGIN_LHB":
+        if not result.get("ok"):
+            return "\n".join([f"{emoji} 两融/龙虎榜 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        symbol = data.get("symbol") or getattr(intent_obj, "symbol", "") or ""
+        title = f"🏦 {symbol} 两融/龙虎榜 · {ts}" if symbol else f"🏦 两融/龙虎榜 · {ts}"
+
+        margin_items = data.get("margin_items", [])
+        lhb_items = data.get("lhb_items", [])
+
+        lines = [title, ""]
+
+        if margin_items:
+            latest_margin = margin_items[0] if isinstance(margin_items[0], dict) else {}
+            m_date = _fmt_date(_pick(latest_margin, ["日期", "交易日期", "截止日期", "date"]))
+            rzye = _pick(latest_margin, ["融资余额", "融资余额(元)", "融资余额(万元)"])
+            rzmr = _pick(latest_margin, ["融资买入额", "融资买入", "融资买入额(元)"])
+            rzjme = _pick(latest_margin, ["融资净买入", "融资净买入额", "融资净偿还"])
+            rqye = _pick(latest_margin, ["融券余额", "融券余额(元)", "融券余额(万元)"])
+            lines.append(f"融资融券({m_date}):")
+            if rzye is not None:
+                lines.append(f"- 融资余额: {_fmt_amount(rzye)}")
+            if rzmr is not None:
+                lines.append(f"- 融资买入额: {_fmt_amount(rzmr)}")
+            if rzjme is not None:
+                lines.append(f"- 融资净买入: {_fmt_amount(rzjme)}")
+            if rqye is not None:
+                lines.append(f"- 融券余额: {_fmt_amount(rqye)}")
+            lines.append("")
+        else:
+            lines.append("融资融券: 暂无数据")
+            lines.append("")
+
+        lines.append("龙虎榜前5:")
+        if lhb_items:
+            for idx, item in enumerate(lhb_items[:5], start=1):
+                if not isinstance(item, dict):
+                    lines.append(f"{idx}. {item}")
+                    continue
+                name = _pick(item, ["名称", "股票简称", "证券简称"], "?")
+                code = _pick(item, ["代码", "股票代码", "证券代码"], "?")
+                reason = _pick(item, ["上榜原因", "解读", "原因"], "")
+                net_buy = _pick(item, ["龙虎榜净买额", "净买额", "买卖净额"])
+                net_text = f" | 净买 {_fmt_amount(net_buy)}" if net_buy is not None else ""
+                reason_text = f" | {reason}" if reason else ""
+                lines.append(f"{idx}. {name}({code}){net_text}{reason_text}")
+        else:
+            lines.append("暂无龙虎榜数据")
 
         lines.extend(["", "数据源: akshare"])
         return _truncate("\n".join(lines), MAX_LEN)
