@@ -49,13 +49,18 @@
 - 港股行情
 
 ### 📰 财经新闻
-- 财经要闻
+- 财经要闻（每条带链接）
 - 个股研报（机构评级、盈利预测）
+
+### 📈 股价走势图（K线图）
+- 直接发送图片到 QQ
+- 支持所有 A 股股票
 
 ## 环境要求
 
 - Python 3.9+
 - akshare: `pip install akshare`
+- matplotlib: `pip install matplotlib`
 
 ## 安装
 
@@ -111,6 +116,11 @@ python main.py --query "港股行情"
 # 新闻
 python main.py --query "财经新闻"
 python main.py --query "宁德时代研报"
+
+# K线图（直接发图片）
+python main.py --query "茅台走势图"
+python main.py --query "宁德时代K线图"
+python main.py --query "长城汽车走势图"
 ```
 
 ## 支持的查询
@@ -133,6 +143,7 @@ python main.py --query "宁德时代研报"
 | 港股 | "港股行情" |
 | 财经新闻 | "财经新闻" |
 | 个股研报 | "宁德时代研报" |
+| K线图 | "茅台走势图"、"宁德时代K线图" |
 
 ## 数据来源
 
