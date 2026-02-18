@@ -195,16 +195,21 @@ class AkshareAdapter:
             
             # 设置中文字体
             font_paths = [
-                '/Users/molezz/Library/Fonts/方正品尚黑简体.ttf',
-                '/System/Library/AssetsV2/com_apple_MobileAsset_Font7/3a9dbc8ddc8b85f43055a28fb5d551e905d43de2.asset/AssetData/LiHeiPro.ttf',
                 '/Library/Fonts/Microsoft/SimHei.ttf',
+                '/Library/Fonts/Microsoft/Microsoft Yahei.ttf',
                 '/Users/molezz/Library/Fonts/msyh.ttf',
+                '/System/Library/Fonts/STHeiti Medium.ttc',
             ]
+            found_font = None
             for fp in font_paths:
                 if os.path.exists(fp):
-                    plt.rcParams['font.sans-serif'] = [fp]
-                    plt.rcParams['axes.unicode_minus'] = False
+                    found_font = fp
                     break
+            if found_font:
+                fm.fontManager.addfont(found_font)
+                prop = fm.FontProperties(fname=found_font)
+                plt.rcParams['font.sans-serif'] = [prop.get_name()]
+                plt.rcParams['axes.unicode_minus'] = False
             
             # 计算日期
             from datetime import datetime, timedelta

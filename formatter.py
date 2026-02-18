@@ -274,8 +274,8 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
         filepath = data.get("filepath", "")
         
         if filepath:
-            # 直接返回图片标签，让 QQ 自动发送
-            return f"📊 {name}({symbol}) 近期股价走势图\n\n<qqimg>{filepath}</qqimg>"
+            # 直接返回图片标签，让 QQ 自动发送（不换行，避免路径前多了空格）
+            return f"📊 {name}({symbol}) 近期股价走势图<qqimg>{filepath}</qqimg>"
         return f"📊 {name}({symbol}) 走势图生成失败"
 
     if intent == "INTRADAY_ANALYSIS":
