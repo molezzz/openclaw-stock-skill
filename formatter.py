@@ -432,14 +432,26 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             return _truncate("\n".join(lines), MAX_LEN)
 
         period = _pick(latest, ["报告期", "日期", "报告日期", "公告日期"], "最新")
-        roe = _pick(latest, ["净资产收益率", "ROE", "净资产收益率(%)"])
+        roe = _pick(latest, ["净资产收益率", "净资产收益率-摊薄", "ROE", "净资产收益率(%)"])
         gross_margin = _pick(latest, ["销售毛利率", "毛利率", "毛利率(%)"])
         net_margin = _pick(latest, ["销售净利率", "净利率", "净利率(%)", "净利润率"])
         debt_ratio = _pick(latest, ["资产负债率", "资产负债率(%)"])
         rev_yoy = _pick(latest, ["营业总收入同比增长率", "营业收入同比增长率", "营收同比"])
         np_yoy = _pick(latest, ["净利润同比增长率", "归母净利润同比增长率", "净利润同比"])
 
+        # 更多指标
+        eps = _pick(latest, ["基本每股收益", "每股收益"])
+        bvps = _pick(latest, ["每股净资产", "每股净资产(元)"])
+        op_cashflow = _pick(latest, ["每股经营现金流", "每股经营现金流量"])
+        inv_turnover = _pick(latest, ["存货周转率", "存货周转次数"])
+        ar_turnover = _pick(latest, ["应收账款周转天数", "应收账款周转率"])
+
         lines.append(f"报告期: {_fmt_date(period)}")
+        
+        if eps is not None and str(eps) not in ('False', ''):
+            lines.append(f"- 每股收益: {eps}")
+        if bvps is not None and str(bvps) not in ('False', ''):
+            lines.append(f"- 每股净资产: {bvps}")
         if roe is not None:
             lines.append(f"- ROE: {_fmt_ratio(roe)}")
         if gross_margin is not None:
@@ -452,6 +464,14 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             lines.append(f"- 营收同比: {_fmt_pct(rev_yoy)}")
         if np_yoy is not None:
             lines.append(f"- 净利润同比: {_fmt_pct(np_yoy)}")
+        
+        # 第二行：更多指标
+        if op_cashflow is not None and str(op_cashflow) not in ('False', ''):
+            lines.append(f"- 每股经营现金流: {op_cashflow}")
+        if inv_turnover is not None and str(inv_turnover) not in ('False', ''):
+            lines.append(f"- 存货周转率: {inv_turnover}")
+        if ar_turnover is not None and str(ar_turnover) not in ('False', ''):
+            lines.append(f"- 应收账款周转天数: {ar_turnover}")
 
         lines.extend(["", "数据源: akshare"])
         return _truncate("\n".join(lines), MAX_LEN)
@@ -505,6 +525,144 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
                 lines.append(f"{idx}. {name}({code}){net_text}{reason_text}")
         else:
             lines.append("暂无龙虎榜数据")
+
+        lines.extend(["", "数据源: akshare"])
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "SECTOR_ANALYSIS":
+        if not result.get("ok"):
+            return "\n".join([f"{emoji} 板块分析 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        sector_type = data.get("sector_type", "industry")
+        top_gain = data.get("top_gain") or data.get("items") or []
+        top_drop = data.get("top_drop") or []
+        label = "概念板块" if sector_type == "concept" else "行业板块"
+
+        lines = [f"🧩 {label}涨跌排行 · {ts}", "", "涨幅前5:"]
+        for idx, item in enumerate(top_gain[:5], start=1):
+            if not isinstance(item, dict):
+                lines.append(f"{idx}. {item}")
+                continue
+            name = _pick(item, ["板块", "板块名称", "名称", "行业", "概念名称", "symbol"], "?")
+            pct = _pick(item, ["涨跌幅", "今日涨跌幅", "涨跌幅%", "涨跌"])
+            lines.append(f"{idx}. {name}: {_fmt_pct(pct)}")
+
+        lines.append("")
+        lines.append("跌幅前5:")
+        for idx, item in enumerate(top_drop[:5], start=1):
+            if not isinstance(item, dict):
+                lines.append(f"{idx}. {item}")
+                continue
+            name = _pick(item, ["板块", "板块名称", "名称", "行业", "概念名称", "symbol"], "?")
+            pct = _pick(item, ["涨跌幅", "今日涨跌幅", "涨跌幅%", "涨跌"])
+            lines.append(f"{idx}. {name}: {_fmt_pct(pct)}")
+
+        lines.extend(["", "数据源: akshare"])
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "FUND_BOND":
+        if not result.get("ok"):
+            return "\n".join([f"{emoji} 基金/可转债 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        scope = data.get("scope", "fund")
+        items = data.get("items", [])
+
+        if scope == "bond":
+            lines = [f"🏛️ 可转债行情 · {ts}", ""]
+            if not items:
+                lines.extend(["暂无可转债数据", "", "数据源: akshare"])
+                return _truncate("\n".join(lines), MAX_LEN)
+
+            for idx, item in enumerate(items[:8], start=1):
+                if not isinstance(item, dict):
+                    lines.append(f"{idx}. {item}")
+                    continue
+                name = _pick(item, ["name", "债券简称", "名称", "转债名称"], "?")
+                code = _pick(item, ["symbol", "code", "代码", "债券代码", "转债代码"], "?")
+                price = _pick(item, ["trade", "最新价", "现价", "收盘", "price"])
+                pct = _pick(item, ["changepercent", "涨跌幅", "涨跌幅%", "涨跌"])
+                lines.append(f"{idx}. {name}({code}): {_fmt_price(price)} {_fmt_pct(pct)}")
+
+            lines.extend(["", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        lines = [f"🏛️ 基金净值/行情 · {ts}", ""]
+        if not items:
+            lines.extend(["暂无基金数据", "", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        for idx, item in enumerate(items[:8], start=1):
+            if not isinstance(item, dict):
+                lines.append(f"{idx}. {item}")
+                continue
+            name = _pick(item, ["基金简称", "名称", "基金名称", "symbol"], "?")
+            code = _pick(item, ["基金代码", "代码", "证券代码"], "?")
+            nav = _pick(item, ["单位净值", "净值", "最新价", "收盘", "close"])
+            pct = _pick(item, ["日增长率", "涨跌幅", "涨跌幅%", "涨跌"])
+            date = _pick(item, ["日期", "净值日期", "date"])
+            label = name if name != "?" else (code if code != "?" else "基金")
+            if date:
+                lines.append(f"{idx}. {_fmt_date(date)} {label}: {_fmt_price(nav)} {_fmt_pct(pct)}")
+            elif pct is not None:
+                lines.append(f"{idx}. {label}: {_fmt_price(nav)} {_fmt_pct(pct)}")
+            else:
+                lines.append(f"{idx}. {label}: {_fmt_price(nav)}")
+
+        lines.extend(["", "数据源: akshare"])
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "HK_US_MARKET":
+        if not result.get("ok"):
+            return "\n".join([f"{emoji} 港美股行情 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        market = data.get("market", "hk")
+        items = data.get("items", [])
+        title = "🌍 美股行情" if market == "us" else "🌍 港股行情"
+
+        lines = [f"{title} · {ts}", ""]
+        if not items:
+            lines.extend(["暂无跨市场数据", "", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        for idx, item in enumerate(items[:8], start=1):
+            if not isinstance(item, dict):
+                lines.append(f"{idx}. {item}")
+                continue
+            name = _pick(item, ["名称", "股票名称", "英文名称", "name", "代码", "symbol"], "?")
+            code = _pick(item, ["代码", "股票代码", "证券代码", "symbol"], "?")
+            price = _pick(item, ["最新价", "现价", "收盘", "close", "price", "最新价(美元)", "最新"])
+            pct = _pick(item, ["涨跌幅", "涨跌幅%", "涨跌", "changepercent"])
+            lines.append(f"{idx}. {name}({code}): {_fmt_price(price)} {_fmt_pct(pct)}")
+
+        lines.extend(["", "数据源: akshare"])
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "DERIVATIVES":
+        if not result.get("ok"):
+            return "\n".join([f"{emoji} 期货/期权 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        scope = data.get("scope", "futures")
+        items = data.get("items", [])
+        title = "📉 期权数据" if scope == "options" else "📉 期货主力合约"
+
+        lines = [f"{title} · {ts}", ""]
+        if not items:
+            lines.extend(["暂无衍生品数据", "", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        for idx, item in enumerate(items[:8], start=1):
+            if not isinstance(item, dict):
+                lines.append(f"{idx}. {item}")
+                continue
+            name = _pick(item, ["名称", "合约", "品种", "主力合约", "symbol", "代码"], "?")
+            code = _pick(item, ["代码", "合约", "symbol", "合约代码"], "?")
+            price = _pick(item, ["最新价", "现价", "收盘", "close", "price", "结算价", "最新"])
+            pct = _pick(item, ["涨跌幅", "涨跌幅%", "涨跌", "changepercent"])
+            lines.append(f"{idx}. {name}({code}): {_fmt_price(price)} {_fmt_pct(pct)}")
 
         lines.extend(["", "数据源: akshare"])
         return _truncate("\n".join(lines), MAX_LEN)

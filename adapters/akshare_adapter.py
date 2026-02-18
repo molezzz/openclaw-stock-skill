@@ -469,3 +469,242 @@ class AkshareAdapter:
             margin_error=margin_err if margin_df is None else None,
             lhb_error=lhb_err if lhb_df is None else None,
         )
+
+    def sector_analysis(self, sector_type: str = "industry", top_n: int = 10) -> Dict[str, Any]:
+        fn_name = "stock_sector_name_code"
+        err = self._ready_or_error(fn_name)
+        if err:
+            return err
+
+        normalized = "概念" if sector_type in {"concept", "概念"} else "行业"
+        spot_indicator = "概念" if normalized == "概念" else "新浪行业"
+        candidates = [
+            ("stock_sector_name_code", [{"indicator": "今日涨跌幅", "sector_type": normalized}]),
+            ("stock_sector_name_code", [{"sector_type": normalized}]),
+            ("stock_sector_spot", [{"indicator": spot_indicator}]),
+        ]
+
+        api_name, df, err_msg = self._call_api_candidates(candidates)
+        if df is None:
+            return self._error(fn_name, err_msg)
+
+        records = self._to_records(df, top_n=0)
+        if isinstance(records, list):
+            records = [item for item in records if isinstance(item, dict)]
+            records.sort(
+                key=lambda row: _safe_float_local(
+                    row.get("涨跌幅")
+                    or row.get("今日涨跌幅")
+                    or row.get("涨跌幅%")
+                    or row.get("涨跌")
+                )
+                or -9999,
+                reverse=True,
+            )
+            top_gain = records[:top_n]
+            top_drop = sorted(
+                records,
+                key=lambda row: _safe_float_local(
+                    row.get("涨跌幅")
+                    or row.get("今日涨跌幅")
+                    or row.get("涨跌幅%")
+                    or row.get("涨跌")
+                )
+                or 9999,
+            )[:top_n]
+        else:
+            top_gain = []
+            top_drop = []
+
+        return self._wrap(
+            api_name or fn_name,
+            scope="sector_analysis",
+            sector_type="concept" if normalized == "概念" else "industry",
+            top_gain=top_gain,
+            top_drop=top_drop,
+            items=top_gain,
+        )
+
+    def fund_bond(self, scope: str = "fund", symbol: Optional[str] = None, top_n: int = 10) -> Dict[str, Any]:
+        fn_name = "fund_bond"
+        err = self._ready_or_error(fn_name)
+        if err:
+            return err
+
+        normalized_scope = "bond" if scope in {"bond", "convertible", "cb"} else "fund"
+
+        if normalized_scope == "fund":
+            clean_symbol = self._clean_symbol(symbol)
+            default_symbol = clean_symbol or "159915"
+            candidates = [
+                (
+                    "fund_etf_hist_em",
+                    [
+                        {
+                            "symbol": default_symbol,
+                            "period": "daily",
+                            "start_date": (datetime.now() - timedelta(days=90)).strftime("%Y%m%d"),
+                            "end_date": datetime.now().strftime("%Y%m%d"),
+                            "adjust": "",
+                        }
+                    ],
+                ),
+                ("fund_etf_spot_em", [{}]),
+                ("fund_open_fund_daily_em", [{}]),
+            ]
+            api_name, df, err_msg = self._call_api_candidates(candidates)
+            if df is None:
+                return self._error(fn_name, err_msg)
+
+            records = self._to_records(df, top_n=0)
+            if isinstance(records, list):
+                records = [item for item in records if isinstance(item, dict)]
+                if clean_symbol:
+                    records = self._filter_records_by_symbol(records, clean_symbol) or records
+                for item in records:
+                    if "代码" not in item:
+                        item["代码"] = default_symbol
+                if records and "日期" in records[0]:
+                    try:
+                        records = sorted(records, key=lambda r: r.get("日期") or "", reverse=True)
+                    except Exception:
+                        pass
+                records = records[:top_n]
+            else:
+                records = []
+
+            return self._wrap(
+                api_name or fn_name,
+                scope="fund",
+                symbol=default_symbol,
+                items=records,
+            )
+
+        candidates = [
+            ("bond_zh_hs_cov_spot", [{}]),
+            ("bond_zh_hs_cov_daily", [{"symbol": symbol or "sh113527"}]),
+        ]
+
+        api_name, df, err_msg = self._call_api_candidates(candidates)
+        if df is None:
+            return self._error(fn_name, err_msg)
+
+        records = self._to_records(df, top_n=0)
+        if isinstance(records, list):
+            records = [item for item in records if isinstance(item, dict)]
+            if symbol:
+                records = self._filter_records_by_symbol(records, str(symbol)) or records
+            records = records[:top_n]
+        else:
+            records = []
+
+        return self._wrap(
+            api_name or fn_name,
+            scope="bond",
+            symbol=symbol,
+            items=records,
+        )
+
+    def hk_us_market(self, market: str = "hk", top_n: int = 10, symbol: Optional[str] = None) -> Dict[str, Any]:
+        fn_name = "hk_us_market"
+        err = self._ready_or_error(fn_name)
+        if err:
+            return err
+
+        normalized_market = "us" if market in {"us", "美股", "usa"} else "hk"
+        if normalized_market == "hk":
+            candidates = [("stock_hk_spot_em", [{}])]
+        else:
+            candidates = [("stock_us_spot_em", [{}])]
+
+        api_name, df, err_msg = self._call_api_candidates(candidates)
+        if df is None:
+            return self._error(fn_name, err_msg)
+
+        records = self._to_records(df, top_n=0)
+        if isinstance(records, list):
+            records = [item for item in records if isinstance(item, dict)]
+            if symbol:
+                records = self._filter_records_by_symbol(records, str(symbol)) or records
+            records = records[:top_n]
+        else:
+            records = []
+
+        return self._wrap(
+            api_name or fn_name,
+            scope="hk_us_market",
+            market=normalized_market,
+            items=records,
+        )
+
+    def derivatives(self, scope: str = "futures", symbol: Optional[str] = None, top_n: int = 10) -> Dict[str, Any]:
+        fn_name = "derivatives"
+        err = self._ready_or_error(fn_name)
+        if err:
+            return err
+
+        normalized_scope = "options" if scope in {"option", "options", "期权"} else "futures"
+
+        if normalized_scope == "futures":
+            candidates = [
+                ("futures_display_main_sina", [{}]),
+                ("match_main_contract", [{"symbol": "cffex"}]),
+                ("futures_main_sina", [{"symbol": "IF0"}, {"symbol": "IH0"}, {"symbol": "IC0"}]),
+            ]
+
+            api_name, df, err_msg = self._call_api_candidates(candidates)
+            if df is None:
+                return self._error(fn_name, err_msg)
+
+            records = self._to_records(df, top_n=0)
+            if isinstance(records, list):
+                records = [item for item in records if isinstance(item, dict)]
+                if symbol:
+                    records = self._filter_records_by_symbol(records, str(symbol)) or records
+                records = records[:top_n]
+            else:
+                records = []
+
+            return self._wrap(
+                api_name or fn_name,
+                scope="futures",
+                symbol=symbol,
+                items=records,
+            )
+
+        candidates = [
+            ("option_current_em", [{}]),
+            ("option_cffex_hs300_spot_sina", [{}]),
+            ("option_finance_board", [{"symbol": "华夏上证50ETF期权"}, {}]),
+        ]
+
+        api_name, df, err_msg = self._call_api_candidates(candidates)
+        if df is None:
+            return self._error(fn_name, err_msg)
+
+        records = self._to_records(df, top_n=0)
+        if isinstance(records, list):
+            records = [item for item in records if isinstance(item, dict)]
+            if symbol:
+                records = self._filter_records_by_symbol(records, str(symbol)) or records
+            records = records[:top_n]
+        else:
+            records = []
+
+        return self._wrap(
+            api_name or fn_name,
+            scope="options",
+            symbol=symbol,
+            items=records,
+        )
+
+
+def _safe_float_local(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.replace(",", "").replace("%", "").strip()
+    try:
+        return float(value)
+    except Exception:
+        return None

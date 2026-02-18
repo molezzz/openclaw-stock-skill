@@ -133,14 +133,15 @@ def _classify_intent(query: str) -> str:
         return FUNDAMENTAL
     if any(k in query for k in ["融资融券", "龙虎榜", "两融", "融资余额", "融券余额"]):
         return MARGIN_LHB
-    if any(k in query for k in ["板块", "行业", "概念"]):
-        return SECTOR_ANALYSIS
-    if any(k in query for k in ["期货", "期权", "衍生品"]):
-        return DERIVATIVES
-    if any(k in query for k in ["基金", "可转债", "债券", "etf", "ETF"]):
-        return FUND_BOND
-    if any(k in query for k in ["港股", "美股"]) or any(k in q for k in ["nasdaq", "dow", "sp500", "hk", "us"]):
+
+    if any(k in query for k in ["港股", "美股", "纳斯达克", "道琼斯", "标普", "恒生", "恒指"]) or any(k in q for k in ["nasdaq", "dow", "sp500", "s&p", "hang seng", "hk", "us"]):
         return HK_US_MARKET
+    if any(k in query for k in ["期货", "期权", "衍生品", "主力合约", "if", "ih", "ic", "im"]):
+        return DERIVATIVES
+    if any(k in query for k in ["基金", "净值", "可转债", "转债", "债券", "etf", "ETF"]):
+        return FUND_BOND
+    if any(k in query for k in ["板块", "行业", "概念", "题材", "轮动", "涨幅榜", "跌幅榜"]):
+        return SECTOR_ANALYSIS
 
     if any(k in query for k in ["大盘", "指数", "上证", "深证", "创业板", "实时"]):
         return INDEX_REALTIME
