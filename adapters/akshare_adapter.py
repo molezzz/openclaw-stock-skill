@@ -593,7 +593,7 @@ class AkshareAdapter:
             research_report=sections["research_report"],
         )
 
-    def stock_pick(self, top_n: int = 5) -> Dict[str, Any]:
+    def stock_pick(self, top_n: int = 5, sector: str = None) -> Dict[str, Any]:
         fn_name = "stock_pick"
         err = self._ready_or_error(fn_name)
         if err:
@@ -618,7 +618,28 @@ class AkshareAdapter:
                 return digits[:6]
             return text
 
-        # 1. 获取热门股票（涨跌幅排行）
+        # 板块关键词映射
+        sector_keywords = {
+            "半导体": ["半导体", "芯片", "集成电路"],
+            "新能源": ["新能源", "锂电池", "光伏", "储能", "电动车"],
+            "医药": ["医药", "医疗器械", "中药", "生物医药"],
+            "消费": ["食品", "饮料", "白酒", "家电", "纺织"],
+            "金融": ["银行", "保险", "证券", "金融"],
+            "科技": ["软件", "互联网", "计算机", "电子"],
+            "军工": ["军工", "航天", "航空", "船舶"],
+            "地产": ["房地产", "地产", "建筑"],
+            "汽车": ["汽车", "新能源车", "整车"],
+        }
+
+        target_sector = None
+        if sector:
+            sector_lower = sector.lower()
+            for key, keywords in sector_keywords.items():
+                if any(k in sector_lower for k in keywords):
+                    target_sector = key
+                    break
+
+        # 1. 获取热门股票
         try:
             import warnings
             with warnings.catch_warnings():
@@ -636,22 +657,61 @@ class AkshareAdapter:
                 code = normalize_code(pick(row, ["代码", "股票代码", "证券代码", "symbol"]))
                 name = pick(row, ["股票名称", "名称", "简称", "name"], "")
                 pct = pick(row, ["涨跌幅", "涨跌幅%"])
+                industry = pick(row, ["所属行业", "行业", "板块"], "")
                 if code:
                     pct_num = _safe_float_local(pct)
                     hot_items.append({
                         "code": code,
                         "name": str(name) if name else code,
                         "pct": pct_num if pct_num else 0,
+                        "industry": str(industry) if industry else "",
                     })
 
         if not hot_items:
             return self._error(fn_name, "热门股票数据为空")
 
-        # 按涨幅排序，取前10
-        hot_items.sort(key=lambda x: x.get("pct", 0), reverse=True)
-        top_candidates = hot_items[:10]
+        # 如果有指定板块，先按板块过滤
+        if target_sector:
+            keywords = sector_keywords.get(target_sector, [target_sector])
+            filtered = []
+            for item in hot_items:
+                ind = item.get("industry", "")
+                if any(k in ind for k in keywords):
+                    filtered.append(item)
+            if filtered:
+                hot_items = filtered
+                top_candidates = hot_items[:top_n]
+            else:
+                # 如果该板块没有找到，用行业资金流来筛选
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        sector_res = self.sector_money_flow(top_n=30)
+                except:
+                    sector_res = {"ok": False}
+                
+                sector_names = set()
+                if sector_res.get("ok"):
+                    for row in sector_res.get("data", {}).get("items", []):
+                        if not isinstance(row, dict):
+                            continue
+                        name = pick(row, ["名称", "行业"])
+                        inflow = _safe_float_local(pick(row, ["今日主力净流入-净额", "主力净流入"]))
+                        if name and inflow and inflow > 0:
+                            for kw in keywords:
+                                if kw in name:
+                                    sector_names.add(str(name).strip())
+                
+                filtered = [item for item in hot_items if any(sn in item.get("industry", "") for sn in sector_names)]
+                if filtered:
+                    hot_items = filtered
+                top_candidates = hot_items[:top_n]
+        else:
+            # 按涨幅排序，取前10
+            hot_items.sort(key=lambda x: x.get("pct", 0), reverse=True)
+            top_candidates = hot_items[:10]
 
-        # 2. 获取行业资金流（筛选热门行业）
+        # 2. 获取行业资金流
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")

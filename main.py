@@ -103,7 +103,15 @@ def dispatch(intent_obj, adapter: AkshareAdapter) -> Dict[str, Any]:
         return adapter.research_report(symbol=symbol, top_n=top_n)
 
     if intent_obj.intent == STOCK_PICK:
-        return adapter.stock_pick(top_n=5)
+        query = intent_obj.query or ""
+        # 提取板块关键词
+        sector = None
+        sector_keywords = ["半导体", "新能源", "医药", "消费", "金融", "科技", "军工", "地产", "汽车"]
+        for kw in sector_keywords:
+            if kw in query:
+                sector = kw
+                break
+        return adapter.stock_pick(top_n=5, sector=sector)
 
     if intent_obj.intent == SECTOR_ANALYSIS:
         top_n = intent_obj.top_n or 10
