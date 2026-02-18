@@ -14,6 +14,7 @@ INTENT_EMOJI = {
     "KLINE_ANALYSIS": "🕯️",
     "KLINE_CHART": "📊",
     "INTRADAY_ANALYSIS": "⏱️",
+    "VOLUME_ANALYSIS": "📊",
     "LIMIT_STATS": "🚦",
     "MONEY_FLOW": "💰",
     "FUNDAMENTAL": "📊",
@@ -318,6 +319,15 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
 
         lines.extend(["", "数据源: akshare"])
         return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "VOLUME_ANALYSIS":
+        # 分时量能分析结果直接返回
+        if not result.get("ok"):
+            return "\n".join([f"{emoji} 分时量能分析 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        # 直接返回脚本输出
+        text = result.get("text", "")
+        return _truncate(f"📊 分时量能分析\n{text}", MAX_LEN)
 
     if intent == "LIMIT_STATS":
         if not result.get("ok"):

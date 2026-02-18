@@ -23,6 +23,7 @@ from router import (
     SECTOR_ANALYSIS,
     STOCK_OVERVIEW,
     STOCK_PICK,
+    VOLUME_ANALYSIS,
     parse_query,
 )
 
@@ -48,6 +49,21 @@ def dispatch(intent_obj, adapter: AkshareAdapter) -> Dict[str, Any]:
         symbol = intent_obj.symbol or "000001"
         period = intent_obj.period if intent_obj.period in {"1", "5", "15", "30", "60"} else "1"
         return adapter.stock_intraday(symbol=symbol, period=period, top_n=top_n)
+
+    if intent_obj.intent == VOLUME_ANALYSIS:
+        # 调用 a-stock-analysis 脚本进行量能分析
+        symbol = intent_obj.symbol or "000001"
+        import subprocess
+        import os
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "a-stock-analysis", "scripts", "analyze.py")
+        result = subprocess.run(
+            ["python3", script_path, symbol, "--minute"],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0:
+            return {"ok": True, "text": result.stdout}
+        else:
+            return {"ok": False, "error": result.stderr}
 
     if intent_obj.intent == LIMIT_STATS:
         top_n = intent_obj.top_n or 20

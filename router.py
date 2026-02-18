@@ -11,6 +11,7 @@ INDEX_REALTIME = "INDEX_REALTIME"
 KLINE_ANALYSIS = "KLINE_ANALYSIS"
 KLINE_CHART = "KLINE_CHART"  # 新增：K线绘图
 INTRADAY_ANALYSIS = "INTRADAY_ANALYSIS"
+VOLUME_ANALYSIS = "VOLUME_ANALYSIS"  # 新增：分时量能分析
 LIMIT_STATS = "LIMIT_STATS"
 MONEY_FLOW = "MONEY_FLOW"
 FUNDAMENTAL = "FUNDAMENTAL"
@@ -133,6 +134,9 @@ def _classify_intent(query: str) -> str:
         return STOCK_PICK
     if any(k in query for k in ["分时", "盘口", "逐笔"]):
         return INTRADAY_ANALYSIS
+    # 分时量能分析
+    if any(k in query for k in ["量能", "放量", "缩量", "主力动向", "抢筹", "出货", "封单", "分时量能"]):
+        return VOLUME_ANALYSIS
     if any(k in query for k in ["k线", "K线", "日线", "周线", "月线"]) or "kline" in q:
         return KLINE_ANALYSIS
     # 绘图功能：K线图、走势、行情图
