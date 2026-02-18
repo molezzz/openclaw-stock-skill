@@ -441,6 +441,7 @@ class AkshareAdapter:
             "money_flow": {"ok": False, "error": "not called"},
             "fundamental": {"ok": False, "error": "not called"},
             "limit_stats": {"ok": False, "error": "not called"},
+            "research_report": {"ok": False, "error": "not called"},
         }
 
         # 1) 实时行情（优先使用分时最新）
@@ -554,6 +555,25 @@ class AkshareAdapter:
             "error": "; ".join(limit_errors[:3]) if limit_errors else None,
         }
 
+        # 5) 研报
+        try:
+            report_res = self.research_report(symbol=clean_symbol, top_n=3)
+            if report_res.get("ok"):
+                report_data = report_res.get("data", {})
+                sections["research_report"] = {
+                    "ok": True,
+                    "api": report_res.get("api"),
+                    "items": report_data.get("items", [])[:3],
+                }
+            else:
+                sections["research_report"] = {
+                    "ok": False,
+                    "api": report_res.get("api"),
+                    "error": report_res.get("error", "unknown error"),
+                }
+        except Exception as exc:
+            sections["research_report"] = {"ok": False, "error": str(exc)}
+
         has_success = any(section.get("ok") for section in sections.values())
         if not has_success:
             combined_error = "; ".join(
@@ -570,6 +590,7 @@ class AkshareAdapter:
             money_flow=sections["money_flow"],
             fundamental=sections["fundamental"],
             limit_stats=sections["limit_stats"],
+            research_report=sections["research_report"],
         )
 
     def margin_lhb(self, symbol: Optional[str] = None, date: Optional[str] = None, top_n: int = 10) -> Dict[str, Any]:

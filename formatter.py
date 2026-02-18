@@ -414,6 +414,29 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             lines.append("")
             lines.append("🚦 近10日涨跌停: 暂无")
 
+        # 研报
+        research_report = data.get("research_report") if isinstance(data.get("research_report"), dict) else {}
+        report_items = research_report.get("items", [])
+        if report_items:
+            lines.append("")
+            lines.append("📰 研报:")
+            for item in report_items[:2]:
+                if not isinstance(item, dict):
+                    continue
+                org = _pick(item, ["机构", "东财评级"], "?")
+                rating = _pick(item, ["东财评级", "评级"], "?")
+                pe = _pick(item, ["2025-盈利预测-市盈率", "2026-盈利预测-市盈率"], None)
+                date = _pick(item, ["日期", "报告日期"])
+                title = _pick(item, ["报告名称", "标题", "研报名称"], "(无标题)")
+                # 截取标题前25字
+                title = title[:25] + "..." if len(title) > 25 else title
+                pe_text = f" | PE {pe}x" if pe else ""
+                lines.append(f"• [{org}] {title}")
+                lines.append(f"  评级: {rating}{pe_text}")
+        elif research_report.get("ok") is False:
+            lines.append("")
+            lines.append("📰 研报: 暂无")
+
         return _truncate("\n".join(lines), MAX_LEN)
 
     if intent == "NEWS":
