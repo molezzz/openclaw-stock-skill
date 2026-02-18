@@ -24,6 +24,7 @@ INTENT_EMOJI = {
     "HK_US_MARKET": "🌍",
     "NEWS": "📰",
     "RESEARCH_REPORT": "📰",
+    "STOCK_PICK": "🏆",
 }
 
 
@@ -334,6 +335,40 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             lines.append(f"{idx}. {name}({code}){pct_text}{board_text}")
 
         lines.extend(["", "数据源: akshare"])
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "STOCK_PICK":
+        if not result.get("ok"):
+            return "\n".join([
+                f"🏆 今日股票推荐 · {datetime.now().strftime('%Y-%m-%d')}",
+                f"\n⚠️ 错误: {result.get('error', '未知')}",
+            ])
+
+        data = result.get("data", {})
+        items = data.get("items", [])
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        lines = [f"🏆 今日股票推荐 · {today}", ""]
+        if not items:
+            lines.extend(["暂无满足条件的推荐标的", "", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        for idx, item in enumerate(items[:5], start=1):
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name") or "未知"
+            code = item.get("code") or "?"
+            pct = item.get("pct", 0)
+            stars = "⭐⭐⭐"
+            
+            lines.append(f"{idx}. {name}({code}) {stars}")
+            lines.append(f"   📈 近期涨幅: {_fmt_pct(pct)}")
+            
+            if item.get("report_rating"):
+                lines.append(f"   📰 研报: [{item.get('report_org', '机构')}] {item.get('report_rating')}")
+            lines.append("")
+
+        lines.append("数据源: akshare")
         return _truncate("\n".join(lines), MAX_LEN)
 
     if intent == "STOCK_OVERVIEW":

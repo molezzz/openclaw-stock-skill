@@ -21,6 +21,7 @@ from router import (
     RESEARCH_REPORT,
     SECTOR_ANALYSIS,
     STOCK_OVERVIEW,
+    STOCK_PICK,
     parse_query,
 )
 
@@ -100,6 +101,9 @@ def dispatch(intent_obj, adapter: AkshareAdapter) -> Dict[str, Any]:
                 "intent": "RESEARCH_REPORT",
             }
         return adapter.research_report(symbol=symbol, top_n=top_n)
+
+    if intent_obj.intent == STOCK_PICK:
+        return adapter.stock_pick(top_n=5)
 
     if intent_obj.intent == SECTOR_ANALYSIS:
         top_n = intent_obj.top_n or 10

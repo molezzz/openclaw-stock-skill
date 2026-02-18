@@ -593,6 +593,129 @@ class AkshareAdapter:
             research_report=sections["research_report"],
         )
 
+    def stock_pick(self, top_n: int = 5) -> Dict[str, Any]:
+        fn_name = "stock_pick"
+        err = self._ready_or_error(fn_name)
+        if err:
+            return err
+
+        def pick(item: dict, keys: list, default: Any = None) -> Any:
+            for key in keys:
+                value = item.get(key)
+                if value not in (None, ""):
+                    return value
+            return default
+
+        def normalize_code(value: Any) -> str:
+            if value is None:
+                return ""
+            text = str(value).strip().upper()
+            if not text:
+                return ""
+            text = text.replace("SH", "").replace("SZ", "").replace("BJ", "")
+            digits = "".join(ch for ch in text if ch.isdigit())
+            if len(digits) >= 6:
+                return digits[:6]
+            return text
+
+        # 1. 获取热门股票（涨跌幅排行）
+        try:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                hot_df = self._ak.stock_hot_rank_em()
+        except Exception as e:
+            return self._error(fn_name, f"热门股票获取失败: {e}")
+
+        hot_items = []
+        if hasattr(hot_df, 'to_dict'):
+            records = hot_df.to_dict(orient='records')
+            for row in records:
+                if not isinstance(row, dict):
+                    continue
+                code = normalize_code(pick(row, ["代码", "股票代码", "证券代码", "symbol"]))
+                name = pick(row, ["股票名称", "名称", "简称", "name"], "")
+                pct = pick(row, ["涨跌幅", "涨跌幅%"])
+                if code:
+                    pct_num = _safe_float_local(pct)
+                    hot_items.append({
+                        "code": code,
+                        "name": str(name) if name else code,
+                        "pct": pct_num if pct_num else 0,
+                    })
+
+        if not hot_items:
+            return self._error(fn_name, "热门股票数据为空")
+
+        # 按涨幅排序，取前10
+        hot_items.sort(key=lambda x: x.get("pct", 0), reverse=True)
+        top_candidates = hot_items[:10]
+
+        # 2. 获取行业资金流（筛选热门行业）
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                sector_res = self.sector_money_flow(top_n=15)
+        except:
+            sector_res = {"ok": False}
+
+        hot_industries = set()
+        if sector_res.get("ok"):
+            sector_items = sector_res.get("data", {}).get("items", [])
+            for row in sector_items:
+                if not isinstance(row, dict):
+                    continue
+                name = pick(row, ["名称", "行业"])
+                inflow = _safe_float_local(pick(row, ["今日主力净流入-净额", "主力净流入"]))
+                if name and inflow and inflow > 0:
+                    hot_industries.add(str(name).strip())
+
+        # 3. 简化：只取研报数据（不做个股详细查询）
+        report_map = {}
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                report_df = self._ak.stock_research_report_em()
+            if hasattr(report_df, 'to_dict'):
+                report_records = report_df.to_dict(orient='records')[:50]
+                for row in report_records:
+                    if not isinstance(row, dict):
+                        continue
+                    code = normalize_code(pick(row, ["股票代码", "代码"]))
+                    rating = str(pick(row, ["东财评级", "评级"], ""))
+                    if "买入" in rating and code not in report_map:
+                        report_map[code] = {
+                            "org": pick(row, ["机构"], "机构"),
+                            "rating": rating,
+                            "title": str(pick(row, ["报告名称"], ""))[:20],
+                        }
+        except:
+            pass
+
+        # 4. 组装推荐结果
+        selected = []
+        for row in top_candidates:
+            code = row["code"]
+            name = row["name"]
+            pct = row["pct"]
+            
+            report = report_map.get(code, {})
+            
+            selected.append({
+                "name": name,
+                "code": code,
+                "pct": pct,
+                "report_org": report.get("org", ""),
+                "report_rating": report.get("rating", ""),
+                "report_title": report.get("title", ""),
+            })
+
+        return self._wrap(
+            fn_name,
+            items=selected[:top_n],
+            count=len(selected),
+        )
+
     def margin_lhb(self, symbol: Optional[str] = None, date: Optional[str] = None, top_n: int = 10) -> Dict[str, Any]:
         fn_name = "margin_lhb"
         err = self._ready_or_error(fn_name)

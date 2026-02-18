@@ -21,6 +21,7 @@ FUND_BOND = "FUND_BOND"
 HK_US_MARKET = "HK_US_MARKET"
 NEWS = "NEWS"
 RESEARCH_REPORT = "RESEARCH_REPORT"
+STOCK_PICK = "STOCK_PICK"
 
 
 # Common A-share stock aliases for quick name-to-symbol routing.
@@ -126,6 +127,8 @@ def _classify_intent(query: str) -> str:
 
     if any(k in query for k in ["涨停", "跌停", "涨跌停"]):
         return LIMIT_STATS
+    if any(k in query for k in ["推荐股票", "选股", "股票推荐", "有什么股票推荐"]):
+        return STOCK_PICK
     if any(k in query for k in ["分时", "盘口", "逐笔"]):
         return INTRADAY_ANALYSIS
     if any(k in query for k in ["k线", "K线", "日线", "周线", "月线"]) or "kline" in q:
