@@ -13,6 +13,7 @@ INTRADAY_ANALYSIS = "INTRADAY_ANALYSIS"
 LIMIT_STATS = "LIMIT_STATS"
 MONEY_FLOW = "MONEY_FLOW"
 FUNDAMENTAL = "FUNDAMENTAL"
+STOCK_OVERVIEW = "STOCK_OVERVIEW"
 MARGIN_LHB = "MARGIN_LHB"
 SECTOR_ANALYSIS = "SECTOR_ANALYSIS"
 DERIVATIVES = "DERIVATIVES"
@@ -127,6 +128,8 @@ def _classify_intent(query: str) -> str:
         return INTRADAY_ANALYSIS
     if any(k in query for k in ["k线", "K线", "日线", "周线", "月线"]) or "kline" in q:
         return KLINE_ANALYSIS
+    if any(k in query for k in ["怎么样", "分析", "看下", "评估", "综合"]):
+        return STOCK_OVERVIEW
     if any(k in query for k in ["资金流", "主力资金", "北向资金", "南向资金", "东向资金", "行业资金", "板块资金"]):
         return MONEY_FLOW
     if any(k in query for k in ["基本面", "财报", "财务", "市盈率", "市净率", "估值", "roe", "ROE", "毛利率", "净利率", "资产负债率"]):

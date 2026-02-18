@@ -18,6 +18,7 @@ from router import (
     MARGIN_LHB,
     MONEY_FLOW,
     SECTOR_ANALYSIS,
+    STOCK_OVERVIEW,
     parse_query,
 )
 
@@ -41,6 +42,16 @@ def dispatch(intent_obj, adapter: AkshareAdapter) -> Dict[str, Any]:
     if intent_obj.intent == LIMIT_STATS:
         top_n = intent_obj.top_n or 20
         return adapter.limit_pool(date=intent_obj.date, top_n=top_n)
+
+    if intent_obj.intent == STOCK_OVERVIEW:
+        symbol = intent_obj.symbol
+        if not symbol:
+            return {
+                "ok": False,
+                "error": "请输入股票代码或名称，如：茅台怎么样、宁德时代分析",
+                "intent": "STOCK_OVERVIEW",
+            }
+        return adapter.stock_overview(symbol=symbol)
 
     if intent_obj.intent == MONEY_FLOW:
         top_n = intent_obj.top_n or 10

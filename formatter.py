@@ -16,6 +16,7 @@ INTENT_EMOJI = {
     "LIMIT_STATS": "🚦",
     "MONEY_FLOW": "💰",
     "FUNDAMENTAL": "📊",
+    "STOCK_OVERVIEW": "📌",
     "MARGIN_LHB": "🏦",
     "SECTOR_ANALYSIS": "🧩",
     "DERIVATIVES": "📉",
@@ -315,6 +316,86 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             lines.append(f"{idx}. {name}({code}){pct_text}{board_text}")
 
         lines.extend(["", "数据源: akshare"])
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "STOCK_OVERVIEW":
+        if not result.get("ok"):
+            return "\n".join([f"{emoji} 个股综合信息 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        symbol = data.get("symbol") or getattr(intent_obj, "symbol", "?") or "?"
+
+        stock_name = symbol
+        query = getattr(intent_obj, "query", "")
+        if query:
+            try:
+                from router import STOCK_NAME_MAP
+
+                for name in sorted(STOCK_NAME_MAP, key=len, reverse=True):
+                    if name in query:
+                        stock_name = name
+                        break
+            except Exception:
+                pass
+
+        realtime = data.get("realtime") if isinstance(data.get("realtime"), dict) else {}
+        money_flow = data.get("money_flow") if isinstance(data.get("money_flow"), dict) else {}
+        fundamental = data.get("fundamental") if isinstance(data.get("fundamental"), dict) else {}
+        limit_stats = data.get("limit_stats") if isinstance(data.get("limit_stats"), dict) else {}
+
+        rt_latest = realtime.get("latest") if isinstance(realtime.get("latest"), dict) else {}
+        flow_latest = money_flow.get("latest") if isinstance(money_flow.get("latest"), dict) else {}
+        fund_latest = fundamental.get("latest") if isinstance(fundamental.get("latest"), dict) else {}
+
+        price = _pick(rt_latest, ["收盘", "close", "最新价", "成交价", "价格"])
+        if price is None:
+            price = _pick(flow_latest, ["收盘价", "收盘", "close", "最新价"])
+        pct = _pick(rt_latest, ["涨跌幅", "涨跌幅%", "pct_change"])
+        if pct is None:
+            pct = _pick(flow_latest, ["涨跌幅", "涨跌幅%"])
+
+        main_inflow = _pick(flow_latest, ["主力净流入-净额", "主力净流入", "主力净额", "主力净流入额"])
+        main_ratio = _pick(flow_latest, ["主力净流入-净占比", "主力净占比", "主力净流入占比"])
+
+        period = _pick(fund_latest, ["报告期", "日期", "报告日期", "公告日期"], "最新")
+        roe = _pick(fund_latest, ["净资产收益率", "净资产收益率-摊薄", "ROE", "净资产收益率(%)"])
+        gross_margin = _pick(fund_latest, ["销售毛利率", "毛利率", "毛利率(%)"])
+        net_margin = _pick(fund_latest, ["销售净利率", "净利率", "净利率(%)", "净利润率"])
+        debt_ratio = _pick(fund_latest, ["资产负债率", "资产负债率(%)"])
+
+        up_count = limit_stats.get("up_count")
+        down_count = limit_stats.get("down_count")
+        days = limit_stats.get("days") or 10
+
+        title_name = f"{stock_name}({symbol})" if stock_name != symbol else symbol
+        lines = [f"📌 个股综合信息 | {title_name}", ""]
+
+        if realtime.get("ok") or price is not None or pct is not None:
+            lines.append(f"💹 实时: {_fmt_price(price)} ({_fmt_pct(pct)})")
+        else:
+            lines.append("💹 实时: 暂无")
+
+        if money_flow.get("ok"):
+            lines.append(f"💰 主力净流入: {_fmt_amount(main_inflow)} (净占比 {_fmt_pct(main_ratio)})")
+        else:
+            lines.append("💰 主力净流入: 暂无")
+
+        if fundamental.get("ok"):
+            lines.append("")
+            lines.append(f"📊 基本面({_fmt_date(period)}):")
+            lines.append(f"ROE {_fmt_ratio(roe)} | 毛利率 {_fmt_ratio(gross_margin)}")
+            lines.append(f"净利率 {_fmt_ratio(net_margin)} | 资产负债率 {_fmt_ratio(debt_ratio)}")
+        else:
+            lines.append("")
+            lines.append("📊 基本面: 暂无")
+
+        if isinstance(up_count, int) and isinstance(down_count, int):
+            lines.append("")
+            lines.append(f"🚦 近{days}日涨跌停: 涨停{up_count}次 / 跌停{down_count}次")
+        else:
+            lines.append("")
+            lines.append("🚦 近10日涨跌停: 暂无")
+
         return _truncate("\n".join(lines), MAX_LEN)
 
     if intent == "MONEY_FLOW":

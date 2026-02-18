@@ -396,6 +396,149 @@ class AkshareAdapter:
             items=items,
         )
 
+    def stock_overview(self, symbol: str) -> Dict[str, Any]:
+        fn_name = "stock_overview"
+        clean_symbol = self._clean_symbol(symbol)
+
+        if not clean_symbol:
+            return self._error(fn_name, "symbol is required")
+
+        sections: Dict[str, Any] = {
+            "realtime": {"ok": False, "error": "not called"},
+            "money_flow": {"ok": False, "error": "not called"},
+            "fundamental": {"ok": False, "error": "not called"},
+            "limit_stats": {"ok": False, "error": "not called"},
+        }
+
+        # 1) 实时行情（优先使用分时最新）
+        try:
+            rt_res = self.stock_intraday(symbol=clean_symbol, period="1", top_n=1)
+            if rt_res.get("ok"):
+                rt_items = rt_res.get("data", {}).get("items", [])
+                latest = rt_items[0] if isinstance(rt_items, list) and rt_items else {}
+                sections["realtime"] = {
+                    "ok": True,
+                    "api": rt_res.get("api"),
+                    "latest": latest,
+                }
+            else:
+                sections["realtime"] = {
+                    "ok": False,
+                    "api": rt_res.get("api"),
+                    "error": rt_res.get("error", "unknown error"),
+                }
+        except Exception as exc:
+            sections["realtime"] = {"ok": False, "error": str(exc)}
+
+        # 2) 个股资金流
+        try:
+            flow_res = self.money_flow(symbol=clean_symbol, top_n=10)
+            if flow_res.get("ok"):
+                flow_data = flow_res.get("data", {})
+                flow_items = flow_data.get("items", [])
+                sections["money_flow"] = {
+                    "ok": True,
+                    "api": flow_res.get("api"),
+                    "latest": flow_items[0] if isinstance(flow_items, list) and flow_items else {},
+                    "items": flow_items,
+                }
+            else:
+                sections["money_flow"] = {
+                    "ok": False,
+                    "api": flow_res.get("api"),
+                    "error": flow_res.get("error", "unknown error"),
+                }
+        except Exception as exc:
+            sections["money_flow"] = {"ok": False, "error": str(exc)}
+
+        # 3) 基本面摘要
+        try:
+            fundamental_res = self.fundamental(symbol=clean_symbol, top_n=10)
+            if fundamental_res.get("ok"):
+                fundamental_data = fundamental_res.get("data", {})
+                sections["fundamental"] = {
+                    "ok": True,
+                    "api": fundamental_res.get("api"),
+                    "latest": fundamental_data.get("latest") or {},
+                    "items": fundamental_data.get("items") or [],
+                }
+            else:
+                sections["fundamental"] = {
+                    "ok": False,
+                    "api": fundamental_res.get("api"),
+                    "error": fundamental_res.get("error", "unknown error"),
+                }
+        except Exception as exc:
+            sections["fundamental"] = {"ok": False, "error": str(exc)}
+
+        # 4) 近期涨跌停（从近10日池中统计该股出现次数）
+        limit_up_count = 0
+        limit_down_count = 0
+        last_date = None
+        limit_errors = []
+
+        code_keys = ["代码", "股票代码", "证券代码", "symbol"]
+        name_keys = ["名称", "股票简称", "证券简称", "简称"]
+
+        for offset in range(0, 10):
+            trade_date = (datetime.now() - timedelta(days=offset)).strftime("%Y%m%d")
+            try:
+                limit_res = self.limit_pool(date=trade_date, top_n=300)
+                if not limit_res.get("ok"):
+                    limit_errors.append(f"{trade_date}: {limit_res.get('error', 'unknown error')}")
+                    continue
+
+                payload = limit_res.get("data", {})
+                up_items = payload.get("up_items") or payload.get("items") or []
+                down_items = payload.get("down_items") or []
+                if last_date is None:
+                    last_date = payload.get("date") or trade_date
+
+                def _is_target(row: Any) -> bool:
+                    if not isinstance(row, dict):
+                        return False
+                    for key in code_keys:
+                        value = row.get(key)
+                        if value is not None and clean_symbol == self._clean_symbol(str(value)):
+                            return True
+                    for key in name_keys:
+                        value = row.get(key)
+                        if value is not None and str(value) in str(symbol):
+                            return True
+                    return False
+
+                limit_up_count += sum(1 for row in up_items if _is_target(row))
+                limit_down_count += sum(1 for row in down_items if _is_target(row))
+            except Exception as exc:
+                limit_errors.append(f"{trade_date}: {exc}")
+
+        sections["limit_stats"] = {
+            "ok": True,
+            "days": 10,
+            "date": last_date,
+            "up_count": limit_up_count,
+            "down_count": limit_down_count,
+            "error": "; ".join(limit_errors[:3]) if limit_errors else None,
+        }
+
+        has_success = any(section.get("ok") for section in sections.values())
+        if not has_success:
+            combined_error = "; ".join(
+                str(section.get("error"))
+                for section in sections.values()
+                if section.get("error")
+            )
+            return self._error(fn_name, combined_error or "all sub-apis failed")
+
+        return self._wrap(
+            fn_name,
+            symbol=clean_symbol,
+            realtime=sections["realtime"],
+            money_flow=sections["money_flow"],
+            fundamental=sections["fundamental"],
+            limit_stats=sections["limit_stats"],
+        )
+
     def margin_lhb(self, symbol: Optional[str] = None, date: Optional[str] = None, top_n: int = 10) -> Dict[str, Any]:
         fn_name = "margin_lhb"
         err = self._ready_or_error(fn_name)
