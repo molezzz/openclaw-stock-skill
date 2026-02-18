@@ -497,14 +497,18 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             publish_time = _pick(item, ["发布时间", "时间", "date", "发布日期"])
             url = _pick(item, ["新闻链接", "链接", "url", "link"], "")
             
-            lines.append(f"{idx}. [{source}] {title}")
+            # 链接放标题前，避免截断
+            if url:
+                lines.append(f"{idx}. [{source}] {title}")
+                lines.append(f"   🔗 {url}")
+            else:
+                lines.append(f"{idx}. [{source}] {title}")
             if publish_time is not None:
                 lines.append(f"   🕐 {_fmt_clock(publish_time)}")
-            if url:
-                lines.append(f"   🔗 {url}")
 
         lines.extend(["", "数据源: akshare"])
-        return _truncate("\n".join(lines), MAX_LEN)
+        # 财经新闻需要更多字符显示链接
+        return _truncate("\n".join(lines), 2500)
 
     if intent == "RESEARCH_REPORT":
         if not result.get("ok"):
