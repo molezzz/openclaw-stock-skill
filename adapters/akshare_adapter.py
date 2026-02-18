@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta
+from io import StringIO
 from typing import Any, Dict, Optional
 
 
@@ -258,6 +260,37 @@ class AkshareAdapter:
                 payload["down_error"] = "; ".join(down_errors)
 
             return self._wrap(fn_name, **payload)
+        except Exception as exc:
+            return self._error(fn_name, str(exc))
+
+    def news(self, top_n: int = 10) -> Dict[str, Any]:
+        fn_name = "stock_news_em"
+        err = self._ready_or_error(fn_name)
+        if err:
+            return err
+
+        try:
+            df = self._ak.stock_news_em()
+            items = self._to_records(df, top_n=max(1, min(top_n, 10)))
+            return self._wrap(fn_name, items=items)
+        except Exception as exc:
+            return self._error(fn_name, str(exc))
+
+    def research_report(self, symbol: str, top_n: int = 10) -> Dict[str, Any]:
+        fn_name = "stock_research_report_em"
+        err = self._ready_or_error(fn_name)
+        if err:
+            return err
+
+        clean_symbol = self._clean_symbol(symbol)
+        if not clean_symbol:
+            return self._error(fn_name, "symbol is required")
+
+        try:
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                df = self._ak.stock_research_report_em(symbol=clean_symbol)
+            items = self._to_records(df, top_n=max(1, min(top_n, 10)))
+            return self._wrap(fn_name, symbol=clean_symbol, items=items)
         except Exception as exc:
             return self._error(fn_name, str(exc))
 

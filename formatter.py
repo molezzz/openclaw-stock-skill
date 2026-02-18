@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 import json
 
@@ -22,6 +22,8 @@ INTENT_EMOJI = {
     "DERIVATIVES": "📉",
     "FUND_BOND": "🏛️",
     "HK_US_MARKET": "🌍",
+    "NEWS": "📰",
+    "RESEARCH_REPORT": "📰",
 }
 
 
@@ -112,8 +114,15 @@ def _fmt_ratio(value: Any) -> str:
 def _fmt_date(value: Any) -> str:
     if value is None:
         return "未知"
-    if hasattr(value, "strftime"):
+    if isinstance(value, datetime):
         return value.strftime("%Y-%m-%d %H:%M")
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+    if hasattr(value, "strftime"):
+        try:
+            return value.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            pass
     text = str(value)
     if len(text) == 8 and text.isdigit():
         return f"{text[:4]}-{text[4:6]}-{text[6:]}"
@@ -125,6 +134,15 @@ def _pick(item: dict, keys: list[str], default: Any = None) -> Any:
         if key in item and item.get(key) not in (None, ""):
             return item.get(key)
     return default
+
+
+def _fmt_clock(value: Any) -> str:
+    text = _fmt_date(value)
+    if len(text) >= 16 and text[10] == " ":
+        return text[11:16]
+    if ":" in text and len(text) >= 5:
+        return text[-5:]
+    return text
 
 
 def _market_sentiment(changes: list[float]) -> str:
@@ -396,6 +414,100 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             lines.append("")
             lines.append("🚦 近10日涨跌停: 暂无")
 
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "NEWS":
+        if not result.get("ok"):
+            return "\n".join([f"📰 财经要闻 · {datetime.now().strftime('%Y-%m-%d')}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        items = data.get("items", [])
+        today = datetime.now().strftime("%Y-%m-%d")
+        lines = [f"📰 财经要闻 · {today}", ""]
+
+        if not items:
+            lines.extend(["暂无新闻数据", "", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        for idx, item in enumerate(items[:10], start=1):
+            if not isinstance(item, dict):
+                lines.append(f"{idx}. {item}")
+                continue
+
+            source = _pick(item, ["文章来源", "新闻来源", "来源", "source"], "未知来源")
+            title = _pick(item, ["新闻标题", "标题", "title", "内容"], "(无标题)")
+            publish_time = _pick(item, ["发布时间", "时间", "date", "发布日期"])
+            lines.append(f"{idx}. [{source}] {title}")
+            if publish_time is not None:
+                lines.append(f"   {_fmt_clock(publish_time)}")
+
+        lines.extend(["", "数据源: akshare"])
+        return _truncate("\n".join(lines), MAX_LEN)
+
+    if intent == "RESEARCH_REPORT":
+        if not result.get("ok"):
+            return "\n".join([f"📰 个股研报 · {datetime.now().strftime('%Y-%m-%d')}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        items = data.get("items", [])
+        symbol = data.get("symbol") or getattr(intent_obj, "symbol", "") or ""
+
+        stock_name = symbol
+        query = getattr(intent_obj, "query", "")
+        if query:
+            try:
+                from router import STOCK_NAME_MAP
+
+                for name in sorted(STOCK_NAME_MAP, key=len, reverse=True):
+                    if name in query:
+                        stock_name = name
+                        break
+            except Exception:
+                pass
+
+        title_name = stock_name if stock_name else (symbol or "个股")
+        today = datetime.now().strftime("%Y-%m-%d")
+        lines = [f"📰 {title_name}研报 · {today}", ""]
+
+        if not items:
+            lines.extend(["暂无研报数据", "", "数据源: akshare"])
+            return _truncate("\n".join(lines), MAX_LEN)
+
+        for idx, item in enumerate(items[:10], start=1):
+            if not isinstance(item, dict):
+                lines.append(f"{idx}. {item}")
+                continue
+
+            org = _pick(item, ["研究机构", "机构", "机构名称", "评级机构"], "未知机构")
+            stock_short = _pick(item, ["股票简称", "简称", "股票名称", "名称"], title_name)
+            report_name = _pick(item, ["报告名称", "研报标题", "标题", "报告标题"], "(无标题)")
+            rating = _pick(item, ["东财评级", "最新评级", "评级", "投资评级"], "未知")
+            date = _pick(item, ["日期", "报告日期", "发布时间", "发布日期"])
+            pe_2025 = _pick(item, ["2025-盈利预测-市盈率", "2025预测市盈率", "2025年PE"]) 
+            pe_2026 = _pick(item, ["2026-盈利预测-市盈率"]) 
+            eps_2025 = _pick(item, ["2025-盈利预测-收益", "2025每股收益", "预测EPS"]) 
+
+            if pe_2025 is not None:
+                profit = f"2025年PE {pe_2025}"
+            elif pe_2026 is not None:
+                profit = f"2026年PE {pe_2026}"
+            elif eps_2025 is not None:
+                profit = f"2025年EPS {eps_2025}"
+            else:
+                profit = _pick(item, ["预测市盈率", "盈利预测"], None)
+
+            lines.append(f"{idx}. [{org}] {stock_short} - {report_name}")
+            if profit is not None:
+                profit_text = str(profit)
+                if "x" not in profit_text.lower() and "倍" not in profit_text:
+                    profit_text = f"{profit_text}x"
+                lines.append(f"   评级: {rating} | 盈利预测: {profit_text}")
+            else:
+                lines.append(f"   评级: {rating}")
+            if date is not None:
+                lines.append(f"   日期: {_fmt_date(date)}")
+
+        lines.extend(["", "数据源: akshare"])
         return _truncate("\n".join(lines), MAX_LEN)
 
     if intent == "MONEY_FLOW":

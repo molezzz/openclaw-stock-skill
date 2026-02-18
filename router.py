@@ -19,6 +19,8 @@ SECTOR_ANALYSIS = "SECTOR_ANALYSIS"
 DERIVATIVES = "DERIVATIVES"
 FUND_BOND = "FUND_BOND"
 HK_US_MARKET = "HK_US_MARKET"
+NEWS = "NEWS"
+RESEARCH_REPORT = "RESEARCH_REPORT"
 
 
 # Common A-share stock aliases for quick name-to-symbol routing.
@@ -136,6 +138,10 @@ def _classify_intent(query: str) -> str:
         return FUNDAMENTAL
     if any(k in query for k in ["融资融券", "龙虎榜", "两融", "融资余额", "融券余额"]):
         return MARGIN_LHB
+    if any(k in query for k in ["研报", "研究报告", "机构评级"]):
+        return RESEARCH_REPORT
+    if any(k in query for k in ["财经新闻", "今日新闻"]) or ("新闻" in query and not any(k in query for k in ["研报", "研究报告", "机构评级"])):
+        return NEWS
 
     if any(k in query for k in ["港股", "美股", "纳斯达克", "道琼斯", "标普", "恒生", "恒指"]) or any(k in q for k in ["nasdaq", "dow", "sp500", "s&p", "hang seng", "hk", "us"]):
         return HK_US_MARKET
