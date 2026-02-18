@@ -179,6 +179,83 @@ class AkshareAdapter:
         except Exception as exc:
             return self._error(fn_name, str(exc))
 
+    def stock_chart(self, symbol: str, period: str = "daily", days: int = 30) -> Dict[str, Any]:
+        """生成股票K线图"""
+        fn_name = "stock_chart"
+        err = self._ready_or_error(fn_name)
+        if err:
+            return err
+
+        try:
+            import matplotlib
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as plt
+            import matplotlib.font_manager as fm
+            
+            # 设置中文字体
+            chinese_fonts = ['LiHei Pro', 'FZPinShangHeiS-R-GB', 'Heiti SC', 'SimHei', 'Noto Sans CJK SC']
+            for font in chinese_fonts:
+                for f in fm.fontManager.ttflist:
+                    if font.lower() in f.name.lower():
+                        plt.rcParams['font.sans-serif'] = [f.name]
+                        plt.rcParams['axes.unicode_minus'] = False
+                        break
+            
+            # 计算日期
+            from datetime import datetime, timedelta
+            end_date = datetime.now().strftime("%Y%m%d")
+            start_date = (datetime.now() - timedelta(days=days+30)).strftime("%Y%m%d")
+            
+            # 获取数据
+            df = self._ak.stock_zh_a_hist(symbol=symbol, period=period, start_date=start_date, end_date=end_date)
+            if df is None or len(df) == 0:
+                return self._error(fn_name, "无法获取数据")
+            
+            # 取最近的数据
+            df = df.tail(days)
+            
+            # 获取股票名称
+            name = symbol
+            try:
+                info = self._ak.stock_individual_info_em(symbol=symbol)
+                if info is not None and len(info) > 0:
+                    name_row = info[info.get('item', '') == '股票名称']
+                    if len(name_row) > 0:
+                        name = name_row.iloc[0].get('value', symbol)
+            except:
+                pass
+            
+            # 绘图
+            plt.figure(figsize=(10, 6))
+            plt.plot(df['日期'], df['收盘'], 'b-', linewidth=1.5)
+            plt.title(f'{name}({symbol}) 近期股价走势', fontsize=14)
+            plt.xlabel('日期')
+            plt.ylabel('收盘价 (元)')
+            plt.grid(True, alpha=0.3)
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            
+            # 保存
+            import os
+            chart_dir = "/tmp/stock_charts"
+            os.makedirs(chart_dir, exist_ok=True)
+            filepath = f"{chart_dir}/{symbol}.png"
+            plt.savefig(filepath, dpi=120)
+            plt.close()
+            
+            return {
+                "ok": True,
+                "data": {
+                    "symbol": symbol,
+                    "name": name,
+                    "filepath": filepath,
+                    "period": period,
+                    "days": days,
+                }
+            }
+        except Exception as exc:
+            return self._error(fn_name, str(exc))
+
     def stock_intraday(self, symbol: str, period: Optional[str] = None, top_n: int = 30) -> Dict[str, Any]:
         fn_name = "stock_intraday"
         err = self._ready_or_error(fn_name)

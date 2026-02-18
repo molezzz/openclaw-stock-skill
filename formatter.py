@@ -12,6 +12,7 @@ MAX_LEN = 1000
 INTENT_EMOJI = {
     "INDEX_REALTIME": "📈",
     "KLINE_ANALYSIS": "🕯️",
+    "KLINE_CHART": "📊",
     "INTRADAY_ANALYSIS": "⏱️",
     "LIMIT_STATS": "🚦",
     "MONEY_FLOW": "💰",
@@ -262,6 +263,23 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
 
         sections.append("\n数据源: akshare")
         return _truncate("\n".join(sections), MAX_LEN)
+
+    if intent == "KLINE_CHART":
+        if not result.get("ok"):
+            return "\n".join([f"{emoji} K线图 · {ts}", f"\n⚠️ 错误: {result.get('error', '未知')}"])
+
+        data = result.get("data", {})
+        symbol = data.get("symbol", "")
+        name = data.get("name", symbol)
+        filepath = data.get("filepath", "")
+        
+        if filepath:
+            return {
+                "type": "image",
+                "path": filepath,
+                "text": f"📊 {name}({symbol}) 近期股价走势图"
+            }
+        return f"📊 {name}({symbol}) 走势图生成失败"
 
     if intent == "INTRADAY_ANALYSIS":
         if not result.get("ok"):

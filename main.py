@@ -14,6 +14,7 @@ from router import (
     INDEX_REALTIME,
     INTRADAY_ANALYSIS,
     KLINE_ANALYSIS,
+    KLINE_CHART,
     LIMIT_STATS,
     MARGIN_LHB,
     MONEY_FLOW,
@@ -35,6 +36,12 @@ def dispatch(intent_obj, adapter: AkshareAdapter) -> Dict[str, Any]:
         symbol = intent_obj.symbol or "000001"
         period = intent_obj.period or "daily"
         return adapter.stock_kline(symbol=symbol, period=period, top_n=top_n)
+
+    if intent_obj.intent == KLINE_CHART:
+        symbol = intent_obj.symbol or "000001"
+        period = intent_obj.period or "daily"
+        days = intent_obj.top_n or 30
+        return adapter.stock_chart(symbol=symbol, period=period, days=days)
 
     if intent_obj.intent == INTRADAY_ANALYSIS:
         top_n = intent_obj.top_n or 30
