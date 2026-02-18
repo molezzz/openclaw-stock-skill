@@ -229,9 +229,13 @@ class AkshareAdapter:
             try:
                 info = self._ak.stock_individual_info_em(symbol=symbol)
                 if info is not None and len(info) > 0:
-                    name_row = info[info.get('item', '') == '股票名称']
+                    # 尝试获取"股票简称"
+                    name_row = info[info.get('item', '') == '股票简称']
                     if len(name_row) > 0:
                         name = name_row.iloc[0].get('value', symbol)
+                    else:
+                        # 如果没有简称，用代码
+                        name = symbol
             except:
                 pass
             
