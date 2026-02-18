@@ -277,7 +277,7 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             return {
                 "type": "image",
                 "path": filepath,
-                "text": f"📊 {name}({symbol}) 近期股价走势图"
+                "text": f"📊 {name}({symbol}) 近期股价走势图\n\n图片已生成，要发送给用户的话，直接说'发图片'即可"
             }
         return f"📊 {name}({symbol}) 走势图生成失败"
 

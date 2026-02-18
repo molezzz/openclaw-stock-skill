@@ -255,7 +255,8 @@ class AkshareAdapter:
                     "filepath": filepath,
                     "period": period,
                     "days": days,
-                }
+                },
+                "image_path": filepath
             }
         except Exception as exc:
             return self._error(fn_name, str(exc))
