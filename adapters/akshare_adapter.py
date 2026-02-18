@@ -594,6 +594,7 @@ class AkshareAdapter:
         )
 
     def stock_pick(self, top_n: int = 5, sector: str = None) -> Dict[str, Any]:
+        import warnings
         fn_name = "stock_pick"
         err = self._ready_or_error(fn_name)
         if err:
@@ -631,87 +632,95 @@ class AkshareAdapter:
             "汽车": ["汽车", "新能源车", "整车"],
         }
 
+        # 板块关键词映射到接口参数
+        sector_map = {
+            "半导体": "半导体",
+            "新能源": "新能源",
+            "锂电池": "锂电池",
+            "光伏": "光伏",
+            "医药": "医药",
+            "消费": "消费电子",
+            "银行": "银行",
+            "保险": "保险",
+            "证券": "证券",
+            "软件": "软件开发",
+            "军工": "军工",
+            "地产": "房地产",
+            "汽车": "汽车整车",
+        }
+
         target_sector = None
+        target_symbol = None
         if sector:
             sector_lower = sector.lower()
             for key, keywords in sector_keywords.items():
                 if any(k in sector_lower for k in keywords):
                     target_sector = key
+                    target_symbol = sector_map.get(key, key)
                     break
 
-        # 1. 获取热门股票
-        try:
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                hot_df = self._ak.stock_hot_rank_em()
-        except Exception as e:
-            return self._error(fn_name, f"热门股票获取失败: {e}")
-
-        hot_items = []
-        if hasattr(hot_df, 'to_dict'):
-            records = hot_df.to_dict(orient='records')
-            for row in records:
-                if not isinstance(row, dict):
-                    continue
-                code = normalize_code(pick(row, ["代码", "股票代码", "证券代码", "symbol"]))
-                name = pick(row, ["股票名称", "名称", "简称", "name"], "")
-                pct = pick(row, ["涨跌幅", "涨跌幅%"])
-                industry = pick(row, ["所属行业", "行业", "板块"], "")
-                if code:
-                    pct_num = _safe_float_local(pct)
-                    hot_items.append({
-                        "code": code,
-                        "name": str(name) if name else code,
-                        "pct": pct_num if pct_num else 0,
-                        "industry": str(industry) if industry else "",
-                    })
-
-        if not hot_items:
-            return self._error(fn_name, "热门股票数据为空")
-
-        # 如果有指定板块，先按板块过滤
-        if target_sector:
-            keywords = sector_keywords.get(target_sector, [target_sector])
-            filtered = []
-            for item in hot_items:
-                ind = item.get("industry", "")
-                if any(k in ind for k in keywords):
-                    filtered.append(item)
-            if filtered:
-                hot_items = filtered
-                top_candidates = hot_items[:top_n]
-            else:
-                # 如果该板块没有找到，用行业资金流来筛选
-                try:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore")
-                        sector_res = self.sector_money_flow(top_n=30)
-                except:
-                    sector_res = {"ok": False}
-                
-                sector_names = set()
-                if sector_res.get("ok"):
-                    for row in sector_res.get("data", {}).get("items", []):
+        # 1. 如果指定了板块，获取板块成分股
+        sector_stocks = []
+        if target_sector and target_symbol:
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    df = self._ak.stock_board_industry_cons_em(symbol=target_symbol)
+                if hasattr(df, 'to_dict'):
+                    for row in df.to_dict(orient='records'):
                         if not isinstance(row, dict):
                             continue
-                        name = pick(row, ["名称", "行业"])
-                        inflow = _safe_float_local(pick(row, ["今日主力净流入-净额", "主力净流入"]))
-                        if name and inflow and inflow > 0:
-                            for kw in keywords:
-                                if kw in name:
-                                    sector_names.add(str(name).strip())
-                
-                filtered = [item for item in hot_items if any(sn in item.get("industry", "") for sn in sector_names)]
-                if filtered:
-                    hot_items = filtered
-                top_candidates = hot_items[:top_n]
+                        code = normalize_code(pick(row, ["代码", "股票代码"]))
+                        name = pick(row, ["名称", "股票名称"], "")
+                        pct = pick(row, ["涨跌幅"])
+                        if code:
+                            pct_num = _safe_float_local(pct)
+                            sector_stocks.append({
+                                "code": code,
+                                "name": str(name) if name else code,
+                                "pct": pct_num if pct_num else 0,
+                            })
+            except Exception as e:
+                pass
+
+        # 如果成功获取到板块成分股，直接用这些数据
+        if sector_stocks:
+            sector_stocks.sort(key=lambda x: x.get("pct", 0), reverse=True)
+            top_candidates = sector_stocks[:top_n]
         else:
-            # 按涨幅排序，取前10
+            # 2. 获取热门股票（涨跌幅排行）
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    hot_df = self._ak.stock_hot_rank_em()
+            except Exception as e:
+                return self._error(fn_name, f"热门股票获取失败: {e}")
+
+            hot_items = []
+            if hasattr(hot_df, 'to_dict'):
+                records = hot_df.to_dict(orient='records')
+                for row in records:
+                    if not isinstance(row, dict):
+                        continue
+                    code = normalize_code(pick(row, ["代码", "股票代码", "证券代码", "symbol"]))
+                    name = pick(row, ["股票名称", "名称", "简称", "name"], "")
+                    pct = pick(row, ["涨跌幅", "涨跌幅%"])
+                    if code:
+                        pct_num = _safe_float_local(pct)
+                        hot_items.append({
+                            "code": code,
+                            "name": str(name) if name else code,
+                            "pct": pct_num if pct_num else 0,
+                        })
+
+            if not hot_items:
+                return self._error(fn_name, "热门股票数据为空")
+
             hot_items.sort(key=lambda x: x.get("pct", 0), reverse=True)
             top_candidates = hot_items[:10]
 
-        # 2. 获取行业资金流
+        # 获取行业资金流
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
