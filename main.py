@@ -106,7 +106,13 @@ def dispatch(intent_obj, adapter: AkshareAdapter) -> Dict[str, Any]:
         query = intent_obj.query or ""
         # 提取板块关键词
         sector = None
-        sector_keywords = ["半导体", "新能源", "医药", "消费", "金融", "科技", "军工", "地产", "汽车"]
+        sector_keywords = [
+            "半导体", "电子", "汽车", "医药生物", "医药",
+            "银行", "保险", "证券", "金融",
+            "房地产", "地产", "电力", "传媒",
+            "锂电池", "电池", "光伏", "光伏设备",
+            "软件", "军工", "食品", "饮料", "白酒", "家电", "纺织"
+        ]
         for kw in sector_keywords:
             if kw in query:
                 sector = kw
