@@ -4,6 +4,7 @@
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta
 from io import StringIO
+import os
 from typing import Any, Dict, Optional
 
 
@@ -193,13 +194,17 @@ class AkshareAdapter:
             import matplotlib.font_manager as fm
             
             # 设置中文字体
-            chinese_fonts = ['LiHei Pro', 'FZPinShangHeiS-R-GB', 'Heiti SC', 'SimHei', 'Noto Sans CJK SC']
-            for font in chinese_fonts:
-                for f in fm.fontManager.ttflist:
-                    if font.lower() in f.name.lower():
-                        plt.rcParams['font.sans-serif'] = [f.name]
-                        plt.rcParams['axes.unicode_minus'] = False
-                        break
+            font_paths = [
+                '/Users/molezz/Library/Fonts/方正品尚黑简体.ttf',
+                '/System/Library/AssetsV2/com_apple_MobileAsset_Font7/3a9dbc8ddc8b85f43055a28fb5d551e905d43de2.asset/AssetData/LiHeiPro.ttf',
+                '/Library/Fonts/Microsoft/SimHei.ttf',
+                '/Users/molezz/Library/Fonts/msyh.ttf',
+            ]
+            for fp in font_paths:
+                if os.path.exists(fp):
+                    plt.rcParams['font.sans-serif'] = [fp]
+                    plt.rcParams['axes.unicode_minus'] = False
+                    break
             
             # 计算日期
             from datetime import datetime, timedelta
@@ -236,7 +241,6 @@ class AkshareAdapter:
             plt.tight_layout()
             
             # 保存
-            import os
             chart_dir = "/tmp/stock_charts"
             os.makedirs(chart_dir, exist_ok=True)
             filepath = f"{chart_dir}/{symbol}.png"
