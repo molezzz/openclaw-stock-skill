@@ -24,6 +24,8 @@ HK_US_MARKET = "HK_US_MARKET"
 NEWS = "NEWS"
 RESEARCH_REPORT = "RESEARCH_REPORT"
 STOCK_PICK = "STOCK_PICK"
+HELP = "HELP"  # 使用说明
+PORTFOLIO = "PORTFOLIO"  # 持仓管理
 
 
 # Common A-share stock aliases for quick name-to-symbol routing.
@@ -166,6 +168,14 @@ def _classify_intent(query: str) -> str:
 
     if any(k in query for k in ["大盘", "指数", "上证", "深证", "创业板", "实时"]):
         return INDEX_REALTIME
+
+    # 使用说明
+    if any(k in query for k in ["介绍股市", "股市怎么用", "使用说明", "帮助", "help", "说明", "玩法", "有哪些功能"]):
+        return HELP
+
+    # 持仓管理
+    if any(k in query for k in ["持仓", "仓位", "我的股票"]):
+        return PORTFOLIO
 
     return INDEX_REALTIME
 

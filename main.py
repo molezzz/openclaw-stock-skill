@@ -24,6 +24,8 @@ from router import (
     STOCK_OVERVIEW,
     STOCK_PICK,
     VOLUME_ANALYSIS,
+    HELP,
+    PORTFOLIO,
     parse_query,
 )
 
@@ -167,6 +169,87 @@ def dispatch(intent_obj, adapter: AkshareAdapter) -> Dict[str, Any]:
         query = intent_obj.query or ""
         scope = "options" if any(k in query for k in ["期权", "option", "Option", "OPTIONS"]) else "futures"
         return adapter.derivatives(scope=scope, symbol=intent_obj.symbol, top_n=top_n)
+
+    if intent_obj.intent == HELP:
+        return {
+            "ok": True,
+            "source": "help",
+            "text": """📈 A股分析 Skill 使用指南
+
+| 类型 | 示例 |
+|------|------|
+| 大盘 | A股大盘、上证指数 |
+| 分时量能 | 茅台量能分析、600519放量分析 |
+| K线 | 茅台近30日K线、600519周线 |
+| K线图 | 茅台走势图、宁德时代K线图 |
+| 涨跌停 | 今日涨停、跌停统计 |
+| 资金流 | 茅台资金流向、市场资金流向 |
+| 基本面 | 茅台财务指标、ROE |
+| 个股综合 | 茅台怎么样、宁德时代分析 |
+| 板块 | 行业板块涨跌、概念板块涨跌 |
+| 股票推荐 | 推荐股票、半导体股票推荐 |
+| 基金/可转债 | 基金净值、可转债行情 |
+| 港股 | 港股行情 |
+| 新闻 | 财经新闻、宁德时代研报 |
+| 持仓管理 | 我的持仓、添加持仓 600519 --cost 10.5 --qty 1000、持仓分析 |
+
+直接发给我就能查~"""
+        }
+
+    if intent_obj.intent == PORTFOLIO:
+        import subprocess
+        import os
+        portfolio_script = os.path.join(os.path.dirname(__file__), "..", "a-stock-analysis", "scripts", "portfolio.py")
+        
+        query = intent_obj.query or ""
+        
+        # 解析持仓命令
+        if "添加" in query or "add" in query.lower():
+            # 提取代码、成本、数量
+            import re
+            code_match = re.search(r"\b(\d{6})\b", query)
+            cost_match = re.search(r"--?cost\s*(\d+\.?\d*)", query)
+            qty_match = re.search(r"--?qty\s*(\d+)", query) or re.search(r"数量\s*(\d+)", query)
+            
+            if code_match and cost_match and qty_match:
+                code = code_match.group(1)
+                cost = cost_match.group(1)
+                qty = qty_match.group(1)
+                result = subprocess.run(
+                    ["python3", portfolio_script, "add", code, "--cost", cost, "--qty", qty],
+                    capture_output=True, text=True, timeout=10
+                )
+                return {"ok": True, "source": "portfolio", "text": result.stdout or "已添加持仓"}
+            else:
+                return {"ok": False, "error": "请输入：添加持仓 代码 --cost 成本价 --qty 数量\n例如：添加持仓 600519 --cost 10.5 --qty 1000"}
+        
+        elif "分析" in query:
+            result = subprocess.run(
+                ["python3", portfolio_script, "analyze"],
+                capture_output=True, text=True, timeout=60
+            )
+            return {"ok": True, "source": "portfolio", "text": result.stdout or "暂无持仓"}
+        
+        elif "删除" in query or "移除" in query:
+            import re
+            code_match = re.search(r"\b(\d{6})\b", query)
+            if code_match:
+                code = code_match.group(1)
+                result = subprocess.run(
+                    ["python3", portfolio_script, "remove", code],
+                    capture_output=True, text=True, timeout=10
+                )
+                return {"ok": True, "source": "portfolio", "text": result.stdout or "已删除"}
+            else:
+                return {"ok": False, "error": "请输入要删除的股票代码"}
+        
+        else:
+            # 显示持仓
+            result = subprocess.run(
+                ["python3", portfolio_script, "show"],
+                capture_output=True, text=True, timeout=10
+            )
+            return {"ok": True, "source": "portfolio", "text": result.stdout or "暂无持仓"}
 
     return {
         "ok": True,

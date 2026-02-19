@@ -66,6 +66,11 @@
 - 直接发送图片到 QQ
 - 支持所有 A 股股票
 
+### 📋 持仓管理
+- 添加/更新/删除持仓
+- 持仓盈亏分析（含分时量能）
+- 查看当前持仓
+
 ## 环境要求
 
 - Python 3.9+
@@ -140,6 +145,11 @@ python main.py --query "宁德时代研报"
 python main.py --query "茅台走势图"
 python main.py --query "宁德时代K线图"
 python main.py --query "长城汽车走势图"
+
+# 持仓管理
+python main.py --query "我的持仓"
+python main.py --query "添加持仓 600519 --cost 1500 --qty 100"
+python main.py --query "持仓分析"
 ```
 
 ## 支持的查询
@@ -165,6 +175,7 @@ python main.py --query "长城汽车走势图"
 | 财经新闻 | "财经新闻" |
 | 个股研报 | "宁德时代研报" |
 | K线图 | "茅台走势图"、"宁德时代K线图" |
+| 持仓管理 | "我的持仓"、"添加持仓 600519"、"持仓分析" |
 
 ## 数据来源
 

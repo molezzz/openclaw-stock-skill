@@ -172,6 +172,14 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
     emoji = INTENT_EMOJI.get(getattr(intent_obj, "intent", ""), "📌")
     intent = getattr(intent_obj, "intent", "")
 
+    # 使用说明
+    if intent == "HELP" and result.get("ok") and result.get("source") == "help":
+        return result.get("text", "")
+
+    # 持仓管理
+    if intent == "PORTFOLIO" and result.get("source") == "portfolio":
+        return result.get("text", "")
+
     if intent == "INDEX_REALTIME" and result.get("ok"):
         items = result.get("data", {}).get("items", [])
         index_targets = [
