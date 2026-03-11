@@ -154,7 +154,7 @@ def _classify_intent(query: str) -> str:
         return MARGIN_LHB
     if any(k in query for k in ["研报", "研究报告", "机构评级"]):
         return RESEARCH_REPORT
-    if any(k in query for k in ["财经新闻", "今日新闻"]) or ("新闻" in query and not any(k in query for k in ["研报", "研究报告", "机构评级"])):
+    if "财经新闻" in query:
         return NEWS
 
     if any(k in query for k in ["港股", "美股", "纳斯达克", "道琼斯", "标普", "恒生", "恒指"]) or any(k in q for k in ["nasdaq", "dow", "sp500", "s&p", "hang seng", "hk", "us"]):

@@ -355,15 +355,105 @@ class AkshareAdapter:
             return self._error(fn_name, str(exc))
 
     def news(self, top_n: int = 10) -> Dict[str, Any]:
-        fn_name = "stock_news_em"
-        err = self._ready_or_error(fn_name)
-        if err:
-            return err
+        """财经要闻
 
+        旧实现依赖 akshare.stock_news_em（东财接口），在部分环境下可能长期返回历史日期。
+        这里改为用 agent-browser 抓取「东方财富财经首页」的最新要闻链接。
+
+        返回字段尽量与原 formatter 兼容：新闻标题/新闻链接/发布时间/文章来源。
+        """
+
+        fn_name = "eastmoney_finance_home"
+
+        # 1) Primary: agent-browser scrape
         try:
-            df = self._ak.stock_news_em()
-            items = self._to_records(df, top_n=max(1, min(top_n, 10)))
-            return self._wrap(fn_name, items=items)
+            import json
+            import subprocess
+
+            n = max(1, min(int(top_n or 10), 20))
+
+            # 打开财经首页（复用默认 session，执行很快）
+            subprocess.run(
+                ["agent-browser", "open", "https://finance.eastmoney.com/"],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+
+            js = r"""
+(() => {
+  const now = new Date();
+  const pad2 = (x) => String(x).padStart(2, '0');
+  const today = `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}`;
+  const ymd = `${now.getFullYear()}${pad2(now.getMonth()+1)}${pad2(now.getDate())}`;
+  const ymdYesterday = (() => {
+    const d = new Date(now.getTime() - 24*3600*1000);
+    return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}`;
+  })();
+
+  const links = Array.from(document.querySelectorAll('a[href]'));
+  const items = [];
+  const seen = new Set();
+
+  for (const a of links) {
+    const href = a.href || '';
+    if (!href.includes('finance.eastmoney.com/a/')) continue;
+    // 排除频道页（/a/cxxxx.html）
+    if (/\/a\/c\w+\.html/.test(href)) continue;
+
+    // 只保留今天/昨天的文章（避免首页混入更早的深链）
+    const dm = href.match(/\/a\/(\d{8})\d+\.html/);
+    if (!dm) continue;
+    const d8 = dm[1];
+    if (!(d8 === ymd || d8 === ymdYesterday)) continue;
+
+    const title = (a.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!title || title.length < 6) continue;
+    if (seen.has(href)) continue;
+    seen.add(href);
+
+    const publish = `${d8.slice(0,4)}-${d8.slice(4,6)}-${d8.slice(6,8)}`;
+
+    items.push({
+      '新闻标题': title,
+      '新闻链接': href,
+      '发布时间': publish || today,
+      '文章来源': '东方财富网'
+    });
+
+    if (items.length >= 80) break;
+  }
+
+  return JSON.stringify(items);
+})();
+"""
+
+            p = subprocess.run(
+                ["agent-browser", "eval", js],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+
+            if p.returncode == 0 and p.stdout:
+                raw = p.stdout.strip()
+                # agent-browser 可能会把 JSON 字符串再包一层引号，这里统一处理
+                # agent-browser 的输出有两种形态：
+                # 1) 直接 JSON 数组：[{...},{...}]
+                # 2) JSON 字符串（外层带引号）："[{...},{...}]"
+                data = json.loads(raw)
+                if isinstance(data, str):
+                    data = json.loads(data)
+
+                items = (data or [])[:n]
+                return self._wrap(fn_name, items=items)
+
+            # fallthrough to error
+            err_msg = (p.stderr or p.stdout or "agent-browser eval failed").strip()
+            return self._error(fn_name, err_msg)
+
         except Exception as exc:
             return self._error(fn_name, str(exc))
 

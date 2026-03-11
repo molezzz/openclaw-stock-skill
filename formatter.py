@@ -530,11 +530,11 @@ def render_output(intent_obj, result, platform: str = "qq") -> str:
             publish_time = _pick(item, ["发布时间", "时间", "date", "发布日期"])
             url = _pick(item, ["新闻链接", "链接", "url", "link"], "")
             
-            # 使用 markdown 格式：标题可点击
+            # 使用 markdown 格式（QQ支持可点击链接）
             if url:
                 lines.append(f"{idx}. [{title}]({url})")
 
-        lines.extend(["", "数据源: akshare"])
+        lines.extend(["", "数据源: eastmoney(agent-browser)"])
         # 财经新闻需要更多字符显示链接
         return _truncate("\n".join(lines), 3000)
 
